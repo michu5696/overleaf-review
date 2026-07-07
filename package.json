@@ -1,6 +1,6 @@
 {
   "name": "overleaf-review",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The missing review layer for Overleaf's Git bridge — sync comments and tracked changes between Overleaf and your local repo.",
   "type": "module",
   "license": "MIT",

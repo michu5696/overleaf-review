@@ -4,6 +4,19 @@ type Args = unknown[];
 type Handler = (args: Args) => void;
 
 /**
+ * Overleaf's socket.io 0.9 UTF-8-encodes *outgoing* message payloads at the
+ * application layer — each UTF-8 byte becomes one Latin-1 char — so a non-ASCII
+ * character (e.g. an em-dash) reaches us as its multi-byte mojibake
+ * (— → â\x80\x94), inflating its length and shifting every OT position after it.
+ * We reverse that on receive. (The reverse direction is not needed: Overleaf
+ * stores exactly the string we send.) ASCII is a no-op, which is why ASCII-only
+ * docs always worked.
+ */
+function utf8Decode(binary: string): string {
+  return Buffer.from(binary, 'latin1').toString('utf8');
+}
+
+/**
  * Minimal socket.io 0.9 client for Overleaf's real-time service.
  *
  * Overleaf (ShareLaTeX heritage) has long pinned an old socket.io 0.9 protocol
@@ -111,7 +124,7 @@ export class OverleafSocket {
         );
       });
     });
-    this.ws.on('message', (data) => this.onFrame(data.toString()));
+    this.ws.on('message', (data) => this.onFrame(utf8Decode(data.toString())));
 
     // Heartbeat a little faster than the server's timeout so it never drops us.
     const intervalMs = (Number(hbTimeout) || 30) * 800;
@@ -172,6 +185,9 @@ export class OverleafSocket {
 
   private send(frame: string): void {
     if (this.debug && !frame.startsWith('2')) console.log('[socket] ->', frame.slice(0, 200));
+    // Send raw: Overleaf stores exactly the string we send (the WebSocket layer
+    // already UTF-8s the wire). It only utf8-encodes in the *other* direction,
+    // which is why onFrame applies utf8Decode. See the utf8Encode/Decode note.
     this.ws.send(frame);
   }
 
