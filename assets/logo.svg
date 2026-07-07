@@ -1,0 +1,28 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="overleaf-review logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3AA655"/>
+      <stop offset="1" stop-color="#1C7A3B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tile -->
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+
+  <!-- document -->
+  <rect x="48" y="44" width="112" height="152" rx="14" fill="#FFFFFF"/>
+
+  <!-- content lines: two normal, then a green insertion + red deletion (tracked changes), then one more -->
+  <rect x="66" y="74"  width="78" height="8" rx="4" fill="#CDD9CF"/>
+  <rect x="66" y="95"  width="78" height="8" rx="4" fill="#CDD9CF"/>
+  <rect x="66" y="116" width="58" height="8" rx="4" fill="#38A65A"/>
+  <rect x="66" y="137" width="44" height="8" rx="4" fill="#E4572E"/>
+  <rect x="66" y="158" width="70" height="8" rx="4" fill="#CDD9CF"/>
+
+  <!-- comment bubble (the "review" layer) -->
+  <path d="M144 116 H208 a16 16 0 0 1 16 16 V160 a16 16 0 0 1 -16 16 H176 l-18 18 v-18 H144 a16 16 0 0 1 -16 -16 V132 a16 16 0 0 1 16 -16 Z"
+        fill="#FFB84D" stroke="#145C2E" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="156" cy="148" r="5" fill="#145C2E"/>
+  <circle cx="178" cy="148" r="5" fill="#145C2E"/>
+  <circle cx="200" cy="148" r="5" fill="#145C2E"/>
+</svg>
