@@ -20,8 +20,8 @@ function usage(): void {
   console.log('Review:');
   console.log('  overleaf-review pull [--out <dir>]');
   console.log('      Read comments + tracked changes into a sidecar (.overleaf/)');
-  console.log('  overleaf-review push --file <f> [--doc <name>] [--dry-run]');
-  console.log('      Send local edits back as tracked-change suggestions');
+  console.log('  overleaf-review push [--file <f>] [--doc <name>] [--dry-run]');
+  console.log('      Send local edits as tracked-change suggestions (all changed .tex if no --file)');
   console.log('  overleaf-review comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]');
   console.log('      Add a comment anchored on the given text');
   console.log('  overleaf-review resolve --thread <id> [--reopen]');
@@ -58,12 +58,7 @@ async function main() {
       break;
     }
     case 'push': {
-      const file = getFlag('file');
-      if (!file) {
-        console.error('push requires --file <path-to-local-.tex>');
-        process.exit(1);
-      }
-      await push({ file, docName: getFlag('doc'), dryRun: process.argv.includes('--dry-run') });
+      await push({ file: getFlag('file'), docName: getFlag('doc'), dryRun: process.argv.includes('--dry-run') });
       break;
     }
     case 'comment': {

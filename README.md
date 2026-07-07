@@ -12,8 +12,9 @@ feedback your co-authors leave in Overleaf, and you can't push suggestions back.
 
 - **`pull`** — read comments + tracked changes into a Git-friendly sidecar (`.overleaf/reviews.md`
   and `.json`) so your tools have every co-author note in context.
-- **`push`** — turn your local edits into tracked-change suggestions in Overleaf (with a
-  `--dry-run` preview so you see the exact ops first).
+- **`push`** — turn your local edits into tracked-change suggestions in Overleaf, mapping files
+  to Overleaf docs by path (push one with `--file`, or every changed `.tex` at once). `--dry-run`
+  previews the exact ops first.
 - **`comment` / `resolve`** — create a comment anchored on any text, and resolve/reopen threads.
 
 > ⚠️ **Unofficial.** Overleaf has no public API for comments or tracked changes. This tool
@@ -42,8 +43,9 @@ npx tsx src/cli.ts link --project <projectId>
 
 # 3. Sync the review layer
 npx tsx src/cli.ts pull                              # comments + changes → .overleaf/
-npx tsx src/cli.ts push --file main.tex --dry-run    # preview edits as suggestions
-npx tsx src/cli.ts push --file main.tex              # send them as tracked changes
+npx tsx src/cli.ts push --dry-run                    # preview ALL changed .tex as suggestions
+npx tsx src/cli.ts push                              # send them as tracked changes
+npx tsx src/cli.ts push --file sections/intro.tex    # or just one file
 npx tsx src/cli.ts comment --anchor "Introduction" --message "Expand this section"
 npx tsx src/cli.ts resolve --thread <id>             # thread ids come from `pull`
 ```

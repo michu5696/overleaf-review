@@ -3,7 +3,10 @@ import { config } from '../config';
 
 export interface Doc {
   _id: string;
+  /** Basename, e.g. "intro.tex". */
   name: string;
+  /** Full project path, e.g. "sections/intro.tex". */
+  path: string;
 }
 
 export interface OpenedProject {
@@ -22,13 +25,17 @@ export interface DocState {
 
 function collectDocs(rootFolder: any[] | undefined): Doc[] {
   const out: Doc[] = [];
-  const walk = (folders: any[]) => {
+  const walk = (folders: any[], prefix: string) => {
     for (const f of folders ?? []) {
-      for (const d of f.docs ?? []) out.push(d);
-      walk(f.folders ?? []);
+      // The top-level folder is always named "rootFolder"; keep it out of paths.
+      const dir = f.name && f.name !== 'rootFolder' ? (prefix ? `${prefix}/${f.name}` : f.name) : prefix;
+      for (const d of f.docs ?? []) {
+        out.push({ _id: d._id, name: d.name, path: dir ? `${dir}/${d.name}` : d.name });
+      }
+      walk(f.folders ?? [], dir);
     }
   };
-  walk(rootFolder ?? []);
+  walk(rootFolder ?? [], '');
   return out;
 }
 

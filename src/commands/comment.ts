@@ -16,7 +16,7 @@ export interface CommentOptions {
 export async function comment(opts: CommentOptions): Promise<void> {
   const { socket, project, docs } = await openProject();
   const doc = opts.docName
-    ? docs.find((d) => d.name === opts.docName)
+    ? docs.find((d) => d.path === opts.docName || d.name === opts.docName)
     : docs.find((d) => d._id === project.rootDoc_id) ?? docs[0];
   if (!doc) {
     socket.close();

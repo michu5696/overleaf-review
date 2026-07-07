@@ -1,12 +1,13 @@
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { relative, resolve as resolvePath, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { diffChars } from 'diff';
-import { openProject, joinDoc } from '../lib/session';
+import { openProject, joinDoc, type Doc } from '../lib/session';
 
 export interface PushOptions {
-  file: string;
-  /** Overleaf doc name to target; defaults to the local file's basename. */
+  /** A single local file to push. If omitted, push every changed local .tex. */
+  file?: string;
+  /** Force the target Overleaf doc (path or basename); only valid with `file`. */
   docName?: string;
   dryRun: boolean;
 }
@@ -45,31 +46,83 @@ function preview(op: Op): string {
   return `  ${kind.padEnd(6)} @ ${String(op.p).padStart(5)}  "${clip}"`;
 }
 
+/** Local file path → Overleaf-style project-relative path (forward slashes). */
+function toOverleafPath(file: string): string {
+  return relative(process.cwd(), resolvePath(file)).split(sep).join('/');
+}
+
+const IGNORE_DIRS = new Set(['node_modules', '.git', '.overleaf', 'tmp', 'dist']);
+
+function discoverLocalTex(dir = process.cwd(), acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || IGNORE_DIRS.has(entry.name)) continue;
+    const full = resolvePath(dir, entry.name);
+    if (entry.isDirectory()) discoverLocalTex(full, acc);
+    else if (entry.name.endsWith('.tex')) acc.push(toOverleafPath(full));
+  }
+  return acc;
+}
+
+/** Match a local file to an Overleaf doc: explicit override, then path, then basename. */
+function pickDoc(
+  file: string,
+  docName: string | undefined,
+  docs: Doc[],
+  rootDocId: string,
+  allowRootFallback: boolean,
+): Doc | undefined {
+  if (docName) return docs.find((d) => d.path === docName || d.name === docName);
+  const rel = toOverleafPath(file);
+  const base = rel.split('/').pop();
+  return (
+    docs.find((d) => d.path === rel) ??
+    docs.find((d) => d.name === base) ??
+    (allowRootFallback ? docs.find((d) => d._id === rootDocId) ?? docs[0] : undefined)
+  );
+}
+
 export async function push(opts: PushOptions): Promise<void> {
-  const local = readFileSync(opts.file, 'utf8');
   const { socket, project, docs } = await openProject();
-
-  const targetName = opts.docName ?? basename(opts.file);
-  const doc =
-    docs.find((d) => d.name === targetName) ??
-    docs.find((d) => d._id === project.rootDoc_id) ??
-    docs[0];
-  const state = await joinDoc(socket, doc._id);
-  const remote = state.lines.join('\n');
-
-  const ops = buildOps(remote, local);
-  const inserts = ops.filter((o) => o.i != null).length;
-  const deletes = ops.filter((o) => o.d != null).length;
-
-  console.log(`Target doc: ${doc.name} (v${state.version})`);
-  if (!ops.length) {
-    console.log('No differences — Overleaf already matches your local file.');
+  const files = opts.file ? [opts.file] : discoverLocalTex();
+  if (!files.length) {
+    console.log('No local .tex files found to push.');
     socket.close();
     return;
   }
-  console.log(`\nWould send ${ops.length} tracked op(s): ${inserts} insert(s), ${deletes} delete(s)`);
-  for (const op of ops.slice(0, 40)) console.log(preview(op));
-  if (ops.length > 40) console.log(`  … and ${ops.length - 40} more`);
+
+  // Plan: map each file to a doc, diff, keep the ones with changes.
+  const plans: { file: string; doc: Doc; ops: Op[]; version: number }[] = [];
+  for (const file of files) {
+    let local: string;
+    try {
+      local = readFileSync(file, 'utf8');
+    } catch {
+      console.log(`- ${file}: cannot read, skipped`);
+      continue;
+    }
+    const doc = pickDoc(file, opts.docName, docs, project.rootDoc_id, Boolean(opts.file));
+    if (!doc) {
+      console.log(`- ${file}: no matching Overleaf doc, skipped`);
+      continue;
+    }
+    const state = await joinDoc(socket, doc._id);
+    const ops = buildOps(state.lines.join('\n'), local);
+    if (ops.length) plans.push({ file, doc, ops, version: state.version });
+  }
+
+  if (!plans.length) {
+    console.log('Nothing to push — local files already match Overleaf.');
+    socket.close();
+    return;
+  }
+
+  for (const pl of plans) {
+    const ins = pl.ops.filter((o) => o.i != null).length;
+    const del = pl.ops.filter((o) => o.d != null).length;
+    console.log(`\n${pl.file} → ${pl.doc.path} (v${pl.version}): ${pl.ops.length} op(s), ${ins} ins / ${del} del`);
+    for (const op of pl.ops.slice(0, 12)) console.log(preview(op));
+    if (pl.ops.length > 12) console.log(`  … and ${pl.ops.length - 12} more`);
+  }
 
   if (opts.dryRun) {
     console.log('\n(dry run — nothing sent to Overleaf)');
@@ -77,24 +130,27 @@ export async function push(opts: PushOptions): Promise<void> {
     return;
   }
 
-  const update = { doc: doc._id, op: ops, v: state.version, meta: { tc: randomBytes(12).toString('hex') } };
   socket.on('otUpdateError', (a) => console.log('!! otUpdateError:', JSON.stringify(a)));
-  const ack = (await socket.emit('applyOtUpdate', [doc._id, update], 20000)) as any[];
+  for (const pl of plans) {
+    const update = { doc: pl.doc._id, op: pl.ops, v: pl.version, meta: { tc: randomBytes(12).toString('hex') } };
+    const ack = (await socket.emit('applyOtUpdate', [pl.doc._id, update], 20000)) as any[];
+    if (ack?.[0]) {
+      socket.close();
+      throw new Error(`Overleaf rejected ${pl.file}: ${JSON.stringify(ack[0])}`);
+    }
+  }
+
+  // Verify each sent doc now matches its local file.
+  let allMatch = true;
+  for (const pl of plans) {
+    const after = await joinDoc(socket, pl.doc._id);
+    if (after.lines.join('\n') !== readFileSync(pl.file, 'utf8')) allMatch = false;
+  }
   socket.close();
-  if (ack?.[0]) throw new Error(`Overleaf rejected the update: ${JSON.stringify(ack[0])}`);
 
-  console.log('\nSent. Verifying …');
-  await new Promise((r) => setTimeout(r, 1500));
-  const verify = await openProject();
-  const after = await joinDoc(verify.socket, doc._id);
-  verify.socket.close();
-
-  const matches = after.lines.join('\n') === local;
-  console.log(`  doc now matches local file: ${matches ? '✅ yes' : '❌ no'}`);
-  console.log(`  tracked changes in doc: ${after.ranges.changes?.length ?? 0}`);
+  const totalOps = plans.reduce((n, p) => n + p.ops.length, 0);
   console.log(
-    matches
-      ? '\n✅ Pushed as suggestions — co-authors will see them as tracked changes to accept/reject.'
-      : '\n⚠️  Doc does not exactly match local; inspect before relying on this.',
+    `\n✅ Pushed suggestions to ${plans.length} file(s), ${totalOps} tracked op(s) total — ` +
+      `verified match: ${allMatch ? 'yes' : '⚠️ NO, inspect'}`,
   );
 }

@@ -67,7 +67,7 @@ export async function pull(outDir = '.overleaf'): Promise<ReviewData> {
       const line = offsetToLine(state.lines, c.op.p);
       const thread = threads[c.op.t] ?? {};
       comments.push({
-        doc: doc.name,
+        doc: doc.path,
         threadId: c.op.t,
         anchor: c.op.c,
         line: line + 1,
@@ -86,7 +86,7 @@ export async function pull(outDir = '.overleaf'): Promise<ReviewData> {
       const isInsert = typeof ch.op.i === 'string';
       const line = offsetToLine(state.lines, ch.op.p);
       changes.push({
-        doc: doc.name,
+        doc: doc.path,
         type: isInsert ? 'insert' : 'delete',
         text: isInsert ? ch.op.i : ch.op.d,
         line: line + 1,
