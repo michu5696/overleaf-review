@@ -100,6 +100,10 @@ own account and projects. Use at your own risk.
 - A `pull` that also writes doc content (not just the review sidecar)
 - Trusted-publishing CI
 
+## 📝 Changelog
+
+Version history and notes are on the [Releases page](https://github.com/michu5696/overleaf-review/releases).
+
 ## 📄 License
 
 MIT © [Miguel Castellano](https://github.com/michu5696)
