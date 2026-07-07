@@ -1,30 +1,57 @@
 {
   "name": "overleaf-review",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The missing review layer for Overleaf's Git bridge — sync comments and tracked changes between Overleaf and your local repo.",
   "type": "module",
   "license": "MIT",
+  "author": "Miguel Castellano",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michu5696/overleaf-review.git"
+  },
+  "homepage": "https://github.com/michu5696/overleaf-review#readme",
+  "bugs": {
+    "url": "https://github.com/michu5696/overleaf-review/issues"
+  },
+  "keywords": [
+    "overleaf",
+    "latex",
+    "git",
+    "comments",
+    "track-changes",
+    "review",
+    "cli"
+  ],
   "bin": {
     "overleaf-review": "dist/cli.js"
   },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "npm run build",
+    "start": "node dist/cli.js",
     "pull": "tsx src/cli.ts pull",
     "push": "tsx src/cli.ts push",
     "probe:read": "tsx src/probes/01-read-ranges.ts",
     "probe:comment": "tsx src/probes/02-write-comment.ts",
     "probe:track": "tsx src/probes/03-write-track-change.ts",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@types/diff": "^7.0.2",
     "diff": "^9.0.0",
     "dotenv": "^16.4.5",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

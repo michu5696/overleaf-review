@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { pull } from './commands/pull';
 import { push } from './commands/push';
 import { comment } from './commands/comment';

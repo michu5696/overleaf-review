@@ -29,6 +29,15 @@ Early but functional. The full read/write path is **proven end-to-end against li
 **`push`** (with `--dry-run`), **`comment`**, and **`resolve`** — comments *and* tracked changes,
 both directions. Next: multi-file mapping and `npm publish`.
 
+## Install
+
+```bash
+npm install -g overleaf-review
+```
+
+Then run `overleaf-review <command>` anywhere. For local development, clone the repo and use
+`npx tsx src/cli.ts <command>` (as shown below).
+
 ## Getting started
 
 ```bash
