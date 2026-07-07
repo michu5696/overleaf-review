@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve as resolvePath, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { diffChars } from 'diff';
+import { diffWordsWithSpace } from 'diff';
 import { openProject, joinDoc, type Doc } from '../lib/session';
 
 export interface PushOptions {
@@ -22,11 +22,16 @@ interface Op {
  * Convert remote→local into a sequential OT op list. Positions are relative to
  * the doc as it evolves through the op array: an insert advances the cursor
  * past the inserted text; a delete removes from the model so the cursor stays.
+ *
+ * Uses a WORD-level diff (whitespace kept significant, so parts still
+ * reconstruct the text exactly) — replacing "shows" with "characterizes" lands
+ * as one delete + one insert of whole words, not a soup of single-character
+ * strikethroughs. Much more readable in Overleaf's review panel.
  */
 export function buildOps(remote: string, local: string): Op[] {
   const ops: Op[] = [];
   let p = 0;
-  for (const part of diffChars(remote, local)) {
+  for (const part of diffWordsWithSpace(remote, local)) {
     if (part.added) {
       ops.push({ p, i: part.value });
       p += part.value.length;
