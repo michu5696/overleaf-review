@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Local probe output / scratch dumps
+tmp/
+
+# Sidecar output when running the tool against a project from within this repo
+# (in a real paper repo, .overleaf/ SHOULD be committed — this ignore is only
+# to keep the tool's own repo clean during testing)
+.overleaf/

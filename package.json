@@ -1,0 +1,28 @@
+{
+  "name": "overleaf-review",
+  "version": "0.0.1",
+  "description": "The missing review layer for Overleaf's Git bridge — sync comments and tracked changes between Overleaf and your local repo.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "overleaf-review": "dist/cli.js"
+  },
+  "scripts": {
+    "pull": "tsx src/cli.ts pull",
+    "probe:read": "tsx src/probes/01-read-ranges.ts",
+    "probe:comment": "tsx src/probes/02-write-comment.ts",
+    "probe:track": "tsx src/probes/03-write-track-change.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
