@@ -74,3 +74,25 @@ export async function setThreadResolved(
   }
   return res.status;
 }
+
+/**
+ * Verify a session cookie is valid by loading the dashboard. Throws if it lands
+ * on the login page. Returns the account email if it can be scraped, else a
+ * generic label. Project-independent, so it works before `link`.
+ */
+export async function validateSession(baseUrl: string, session2: string): Promise<string> {
+  const res = await fetch(`${baseUrl}/project`, {
+    headers: { Cookie: `overleaf_session2=${session2}`, 'User-Agent': UA },
+    redirect: 'follow',
+  });
+  const html = await res.text();
+  const looksLikeLogin =
+    res.url.includes('/login') || /name="ol-page"\s+content="login"/.test(html) || html.includes('id="loginForm"');
+  if (looksLikeLogin) {
+    throw new Error('Session cookie is invalid or expired (got the login page).');
+  }
+  const m =
+    html.match(/name="ol-usersEmail"\s+content="([^"]+)"/) ??
+    html.match(/"email":"([^"@]+@[^"]+)"/);
+  return m ? m[1] : 'your Overleaf account';
+}

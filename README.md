@@ -24,25 +24,35 @@ feedback your co-authors leave in Overleaf, and you can't push suggestions back.
 ## Status
 
 Early but functional. The full read/write path is **proven end-to-end against live overleaf.com**
-(see [`src/probes/`](src/probes/)). Working commands: **`pull`**, **`push`** (with `--dry-run`),
-**`comment`**, and **`resolve`** — comments *and* tracked changes, both directions. Next: a
-browser-based `login` (SSO-friendly) and `npm publish`.
+(see [`src/probes/`](src/probes/)). Working commands: **`login`**, **`link`**, **`pull`**,
+**`push`** (with `--dry-run`), **`comment`**, and **`resolve`** — comments *and* tracked changes,
+both directions. Next: multi-file mapping and `npm publish`.
 
-## Setup (development)
+## Getting started
 
 ```bash
 npm install
-cp .env.example .env      # then fill in OVERLEAF_SESSION2 + OVERLEAF_PROJECT_ID
-npm run pull              # writes .overleaf/reviews.md and .json
-npm run push -- --file main.tex --dry-run   # preview local edits as suggestions
-npm run push -- --file main.tex             # send them as tracked changes
+
+# 1. Authenticate (stored in ~/.config/overleaf-review/, chmod 600 — never in the repo)
+npx tsx src/cli.ts login             # paste your overleaf_session2 cookie, or:
+npx tsx src/cli.ts login --browser   # opens your Chrome, log in normally (SSO works)
+
+# 2. Link this repo to an Overleaf project (id from the project URL)
+npx tsx src/cli.ts link --project <projectId>
+
+# 3. Sync the review layer
+npx tsx src/cli.ts pull                              # comments + changes → .overleaf/
+npx tsx src/cli.ts push --file main.tex --dry-run    # preview edits as suggestions
+npx tsx src/cli.ts push --file main.tex              # send them as tracked changes
 npx tsx src/cli.ts comment --anchor "Introduction" --message "Expand this section"
-npx tsx src/cli.ts resolve --thread <id>    # thread ids come from `pull`
+npx tsx src/cli.ts resolve --thread <id>             # thread ids come from `pull`
 ```
 
-`OVERLEAF_SESSION2` is the value of your `overleaf_session2` browser cookie. It grants full
-account access — treat it like a password (`.env` is gitignored). A friendly `overleaf-review
-login` command (opens a browser, works with institutional SSO) will replace this for end users.
+Auth grants full account access, so it's treated like a password: `login` stores it in
+`~/.config/overleaf-review/credentials.json` (chmod 600), never in the repo. `--browser` needs
+Playwright (`npm i -D playwright`) and drives your installed Chrome — no extra download — and
+works with institutional SSO. For dev you can instead put `OVERLEAF_SESSION2` and
+`OVERLEAF_PROJECT_ID` in a gitignored `.env` (env vars take priority).
 
 ## How it works
 

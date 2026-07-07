@@ -2,6 +2,8 @@ import { pull } from './commands/pull';
 import { push } from './commands/push';
 import { comment } from './commands/comment';
 import { resolve } from './commands/resolve';
+import { login } from './commands/login';
+import { link } from './commands/link';
 
 function getFlag(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -10,7 +12,12 @@ function getFlag(name: string): string | undefined {
 
 function usage(): void {
   console.log('overleaf-review — sync Overleaf review data with git\n');
-  console.log('Usage:');
+  console.log('Setup:');
+  console.log('  overleaf-review login [--cookie <val>] [--browser]');
+  console.log('      Authenticate and store your session (--browser is SSO-friendly)');
+  console.log('  overleaf-review link --project <id>');
+  console.log('      Link this repo to an Overleaf project (writes .overleaf/config.json)\n');
+  console.log('Review:');
   console.log('  overleaf-review pull [--out <dir>]');
   console.log('      Read comments + tracked changes into a sidecar (.overleaf/)');
   console.log('  overleaf-review push --file <f> [--doc <name>] [--dry-run]');
@@ -24,6 +31,23 @@ function usage(): void {
 async function main() {
   const cmd = process.argv[2];
   switch (cmd) {
+    case 'login': {
+      await login({
+        cookie: getFlag('cookie'),
+        baseUrl: getFlag('base-url'),
+        browser: process.argv.includes('--browser'),
+      });
+      break;
+    }
+    case 'link': {
+      const project = getFlag('project');
+      if (!project) {
+        console.error('link requires --project <id>');
+        process.exit(1);
+      }
+      link(project, getFlag('base-url'));
+      break;
+    }
     case 'pull': {
       const out = getFlag('out') ?? '.overleaf';
       const data = await pull(out);
