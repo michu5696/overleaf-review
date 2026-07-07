@@ -9,6 +9,7 @@
   },
   "scripts": {
     "pull": "tsx src/cli.ts pull",
+    "push": "tsx src/cli.ts push",
     "probe:read": "tsx src/probes/01-read-ranges.ts",
     "probe:comment": "tsx src/probes/02-write-comment.ts",
     "probe:track": "tsx src/probes/03-write-track-change.ts",
@@ -16,6 +17,8 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@types/diff": "^7.0.2",
+    "diff": "^9.0.0",
     "dotenv": "^16.4.5",
     "ws": "^8.18.0"
   },
