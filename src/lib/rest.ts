@@ -53,3 +53,24 @@ export async function postThreadMessage(
   }
   return res.status;
 }
+
+/**
+ * Resolve or reopen a comment thread. Note: unlike message-posting, this action
+ * is DOC-scoped (`/project/:id/doc/:docId/thread/:threadId/resolve`).
+ */
+export async function setThreadResolved(
+  docId: string,
+  threadId: string,
+  reopen: boolean,
+  csrf: string,
+): Promise<number> {
+  const action = reopen ? 'reopen' : 'resolve';
+  const res = await fetch(
+    `${config.baseUrl}/project/${config.projectId}/doc/${docId}/thread/${threadId}/${action}`,
+    { method: 'POST', headers: headers({ 'X-CSRF-Token': csrf }) },
+  );
+  if (!res.ok) {
+    throw new Error(`${action} thread ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return res.status;
+}

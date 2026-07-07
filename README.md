@@ -14,7 +14,7 @@ feedback your co-authors leave in Overleaf, and you can't push suggestions back.
   and `.json`) so your tools have every co-author note in context.
 - **`push`** — turn your local edits into tracked-change suggestions in Overleaf (with a
   `--dry-run` preview so you see the exact ops first).
-- **`comment` / `resolve`** _(planned)_ — create and resolve comment threads from the CLI.
+- **`comment` / `resolve`** — create a comment anchored on any text, and resolve/reopen threads.
 
 > ⚠️ **Unofficial.** Overleaf has no public API for comments or tracked changes. This tool
 > talks to the same real-time and thread endpoints the web editor uses. It is **not affiliated
@@ -24,9 +24,9 @@ feedback your co-authors leave in Overleaf, and you can't push suggestions back.
 ## Status
 
 Early but functional. The full read/write path is **proven end-to-end against live overleaf.com**
-(see [`src/probes/`](src/probes/)). Working commands: **`pull`** (read review data into a sidecar)
-and **`push`** (send local edits back as tracked-change suggestions, with a `--dry-run` preview).
-Next: `comment`/`resolve` and a browser-based `login`.
+(see [`src/probes/`](src/probes/)). Working commands: **`pull`**, **`push`** (with `--dry-run`),
+**`comment`**, and **`resolve`** — comments *and* tracked changes, both directions. Next: a
+browser-based `login` (SSO-friendly) and `npm publish`.
 
 ## Setup (development)
 
@@ -36,6 +36,8 @@ cp .env.example .env      # then fill in OVERLEAF_SESSION2 + OVERLEAF_PROJECT_ID
 npm run pull              # writes .overleaf/reviews.md and .json
 npm run push -- --file main.tex --dry-run   # preview local edits as suggestions
 npm run push -- --file main.tex             # send them as tracked changes
+npx tsx src/cli.ts comment --anchor "Introduction" --message "Expand this section"
+npx tsx src/cli.ts resolve --thread <id>    # thread ids come from `pull`
 ```
 
 `OVERLEAF_SESSION2` is the value of your `overleaf_session2` browser cookie. It grants full
