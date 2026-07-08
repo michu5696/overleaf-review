@@ -2,7 +2,11 @@
 import { pull } from './commands/pull';
 import { push } from './commands/push';
 import { comment } from './commands/comment';
+import { reply } from './commands/reply';
 import { resolve } from './commands/resolve';
+import { deleteComment } from './commands/delete-comment';
+import { accept } from './commands/accept';
+import { reject } from './commands/reject';
 import { login } from './commands/login';
 import { link } from './commands/link';
 
@@ -11,42 +15,48 @@ function getFlag(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
+/** All values for a repeatable flag, also splitting comma-separated lists. */
+function getAll(name: string): string[] {
+  const out: string[] = [];
+  process.argv.forEach((a, i) => {
+    if (a === `--${name}` && process.argv[i + 1]) out.push(process.argv[i + 1]);
+  });
+  return out.flatMap((v) => v.split(',')).map((s) => s.trim()).filter(Boolean);
+}
+
 function usage(): void {
   console.log('overleaf-review — sync Overleaf review data with git\n');
   console.log('Setup:');
-  console.log('  overleaf-review login [--cookie <val>] [--browser]');
-  console.log('      Authenticate and store your session (--browser is SSO-friendly)');
-  console.log('  overleaf-review link --project <id>');
-  console.log('      Link this repo to an Overleaf project (writes .overleaf/config.json)\n');
-  console.log('Review:');
-  console.log('  overleaf-review pull [--out <dir>]');
-  console.log('      Read comments + tracked changes into a sidecar (.overleaf/)');
-  console.log('  overleaf-review push [--file <f>] [--doc <name>] [--dry-run]');
-  console.log('      Send local edits as tracked-change suggestions (all changed .tex if no --file)');
-  console.log('  overleaf-review comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]');
-  console.log('      Add a comment anchored on the given text');
-  console.log('  overleaf-review resolve --thread <id> [--reopen]');
-  console.log('      Resolve (or reopen) a comment thread (ids come from `pull`)');
+  console.log('  login [--cookie <val>] [--browser]        Authenticate (SSO-friendly --browser)');
+  console.log('  link --project <id>                       Link this repo to an Overleaf project\n');
+  console.log('Read:');
+  console.log('  pull [--out <dir>]                        Comments + tracked changes → sidecar\n');
+  console.log('Comments:');
+  console.log('  comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]');
+  console.log('  reply --thread <id> --message <text>      Reply to an existing thread');
+  console.log('  resolve --thread <id> [--reopen]          Resolve/reopen a thread');
+  console.log('  delete-comment --thread <id>              Delete a thread\n');
+  console.log('Tracked changes:');
+  console.log('  push [--file <f>] [--doc <name>] [--dry-run]   Send local edits as suggestions');
+  console.log('  accept --change <id> [--change <id> …]    Accept collaborators’ changes');
+  console.log('  reject --change <id> [--change <id> …]    Reject collaborators’ changes');
+  console.log('\n(thread/change ids come from `pull`; --change accepts comma-separated lists too)');
 }
 
 async function main() {
   const cmd = process.argv[2];
   switch (cmd) {
-    case 'login': {
+    case 'login':
       await login({
         cookie: getFlag('cookie'),
         baseUrl: getFlag('base-url'),
         browser: process.argv.includes('--browser'),
       });
       break;
-    }
     case 'link': {
       const project = getFlag('project');
-      if (!project) {
-        console.error('link requires --project <id>');
-        process.exit(1);
-      }
-      link(project, getFlag('base-url'));
+      if (!project) fail('link requires --project <id>');
+      link(project!, getFlag('base-url'));
       break;
     }
     case 'pull': {
@@ -58,39 +68,57 @@ async function main() {
       );
       break;
     }
-    case 'push': {
+    case 'push':
       await push({ file: getFlag('file'), docName: getFlag('doc'), dryRun: process.argv.includes('--dry-run') });
       break;
-    }
     case 'comment': {
       const anchor = getFlag('anchor');
       const message = getFlag('message');
-      if (!anchor || !message) {
-        console.error('comment requires --anchor <text> and --message <text>');
-        process.exit(1);
-      }
+      if (!anchor || !message) fail('comment requires --anchor <text> and --message <text>');
       const nthRaw = getFlag('nth');
-      await comment({
-        docName: getFlag('doc'),
-        anchor,
-        message,
-        occurrence: nthRaw ? Number(nthRaw) : undefined,
-      });
+      await comment({ docName: getFlag('doc'), anchor: anchor!, message: message!, occurrence: nthRaw ? Number(nthRaw) : undefined });
+      break;
+    }
+    case 'reply': {
+      const thread = getFlag('thread');
+      const message = getFlag('message');
+      if (!thread || !message) fail('reply requires --thread <id> and --message <text>');
+      await reply(thread!, message!);
       break;
     }
     case 'resolve': {
       const thread = getFlag('thread');
-      if (!thread) {
-        console.error('resolve requires --thread <id>');
-        process.exit(1);
-      }
-      await resolve(thread, process.argv.includes('--reopen'));
+      if (!thread) fail('resolve requires --thread <id>');
+      await resolve(thread!, process.argv.includes('--reopen'));
+      break;
+    }
+    case 'delete-comment': {
+      const thread = getFlag('thread');
+      if (!thread) fail('delete-comment requires --thread <id>');
+      await deleteComment(thread!);
+      break;
+    }
+    case 'accept': {
+      const ids = getAll('change');
+      if (!ids.length) fail('accept requires --change <id>');
+      await accept(ids);
+      break;
+    }
+    case 'reject': {
+      const ids = getAll('change');
+      if (!ids.length) fail('reject requires --change <id>');
+      await reject(ids);
       break;
     }
     default:
       usage();
       process.exit(cmd ? 1 : 0);
   }
+}
+
+function fail(msg: string): never {
+  console.error(msg);
+  process.exit(1);
 }
 
 main()

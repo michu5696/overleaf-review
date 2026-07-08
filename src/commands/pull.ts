@@ -24,6 +24,7 @@ interface ReviewComment {
 
 interface ReviewChange {
   doc: string;
+  id: string;
   type: 'insert' | 'delete';
   text: string;
   line: number;
@@ -87,6 +88,7 @@ export async function pull(outDir = '.overleaf'): Promise<ReviewData> {
       const line = offsetToLine(state.lines, ch.op.p);
       changes.push({
         doc: doc.path,
+        id: ch.id,
         type: isInsert ? 'insert' : 'delete',
         text: isInsert ? ch.op.i : ch.op.d,
         line: line + 1,
@@ -117,6 +119,11 @@ function renderMarkdown(d: ReviewData): string {
   L.push(`# Overleaf review — ${d.project}`, '');
   L.push(`_Pulled ${d.pulledAt} from project \`${d.projectId}\`._`, '');
   L.push(`**${d.comments.length}** comment(s), **${d.changes.length}** tracked change(s).`, '');
+  L.push(
+    '_Act on these:_ `reply --thread <id> --message <text>` · `resolve --thread <id>` · ' +
+      '`delete-comment --thread <id>` · `accept --change <id>` · `reject --change <id>`.',
+    '',
+  );
 
   const byDoc = <T extends { doc: string }>(items: T[]) => {
     const m = new Map<string, T[]>();
@@ -131,6 +138,7 @@ function renderMarkdown(d: ReviewData): string {
       for (const c of items) {
         const flag = c.resolved ? ' — ✅ resolved' : '';
         L.push(`#### 💬 “${c.anchor}” · line ${c.line}${flag}`);
+        L.push(`\`thread ${c.threadId}\``);
         L.push('```', c.context, '```');
         for (const m of c.messages) {
           L.push(`- **${m.author}**: ${m.content}`);
@@ -147,7 +155,10 @@ function renderMarkdown(d: ReviewData): string {
       L.push(`### ${doc}`, '');
       for (const ch of items) {
         const verb = ch.type === 'insert' ? 'inserted' : 'deleted';
-        L.push(`- **${verb}** at line ${ch.line} by ${ch.author}: \`${ch.text.replace(/\n/g, '⏎')}\``);
+        L.push(
+          `- **${verb}** at line ${ch.line} by ${ch.author} · \`change ${ch.id}\`: ` +
+            `\`${ch.text.replace(/\n/g, '⏎')}\``,
+        );
         L.push('  ```', ch.context.replace(/^/gm, '  '), '  ```');
       }
       L.push('');

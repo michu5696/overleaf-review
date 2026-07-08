@@ -75,6 +75,35 @@ export async function setThreadResolved(
   return res.status;
 }
 
+/** Accept tracked changes by id (doc-scoped). Rejecting has no endpoint — it's
+ * done client-side via an inverse OT op (see the `reject` command). */
+export async function acceptChanges(
+  docId: string,
+  changeIds: string[],
+  csrf: string,
+): Promise<number> {
+  const res = await fetch(
+    `${config.baseUrl}/project/${config.projectId}/doc/${docId}/changes/accept`,
+    {
+      method: 'POST',
+      headers: headers({ 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ change_ids: changeIds }),
+    },
+  );
+  if (!res.ok) throw new Error(`acceptChanges ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.status;
+}
+
+/** Delete a comment thread (doc-scoped). */
+export async function deleteThread(docId: string, threadId: string, csrf: string): Promise<number> {
+  const res = await fetch(
+    `${config.baseUrl}/project/${config.projectId}/doc/${docId}/thread/${threadId}`,
+    { method: 'DELETE', headers: headers({ 'X-CSRF-Token': csrf }) },
+  );
+  if (!res.ok) throw new Error(`deleteThread ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.status;
+}
+
 /**
  * Verify a session cookie is valid by loading the dashboard. Throws if it lands
  * on the login page. Returns the account email if it can be scraped, else a
