@@ -94,6 +94,20 @@ export async function acceptChanges(
   return res.status;
 }
 
+/** Delete a single message within a thread (flat path, like posting a message). */
+export async function deleteMessage(
+  threadId: string,
+  messageId: string,
+  csrf: string,
+): Promise<number> {
+  const res = await fetch(
+    `${config.baseUrl}/project/${config.projectId}/thread/${threadId}/messages/${messageId}`,
+    { method: 'DELETE', headers: headers({ 'X-CSRF-Token': csrf }) },
+  );
+  if (!res.ok) throw new Error(`deleteMessage ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.status;
+}
+
 /** Delete a comment thread (doc-scoped). */
 export async function deleteThread(docId: string, threadId: string, csrf: string): Promise<number> {
   const res = await fetch(

@@ -5,6 +5,7 @@ import { comment } from './commands/comment';
 import { reply } from './commands/reply';
 import { resolve } from './commands/resolve';
 import { deleteComment } from './commands/delete-comment';
+import { deleteThreadMessage } from './commands/delete-message';
 import { accept } from './commands/accept';
 import { reject } from './commands/reject';
 import { login } from './commands/login';
@@ -35,7 +36,8 @@ function usage(): void {
   console.log('  comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]');
   console.log('  reply --thread <id> --message <text>      Reply to an existing thread');
   console.log('  resolve --thread <id> [--reopen]          Resolve/reopen a thread');
-  console.log('  delete-comment --thread <id>              Delete a thread\n');
+  console.log('  delete-comment --thread <id>              Delete a whole thread');
+  console.log('  delete-message --message-id <id>          Delete a single message\n');
   console.log('Tracked changes:');
   console.log('  push [--file <f>] [--doc <name>] [--dry-run]   Send local edits as suggestions');
   console.log('  accept --change <id> [--change <id> …]    Accept collaborators’ changes');
@@ -96,6 +98,12 @@ async function main() {
       const thread = getFlag('thread');
       if (!thread) fail('delete-comment requires --thread <id>');
       await deleteComment(thread!);
+      break;
+    }
+    case 'delete-message': {
+      const messageId = getFlag('message-id');
+      if (!messageId) fail('delete-message requires --message-id <id>');
+      await deleteThreadMessage(messageId!, getFlag('thread'));
       break;
     }
     case 'accept': {

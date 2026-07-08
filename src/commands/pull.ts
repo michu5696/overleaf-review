@@ -6,6 +6,7 @@ import { getThreads } from '../lib/rest';
 import { offsetToLine, lineContext } from '../lib/anchors';
 
 interface Message {
+  id: string;
   author: string;
   email?: string;
   content: string;
@@ -75,6 +76,7 @@ export async function pull(outDir = '.overleaf'): Promise<ReviewData> {
         context: lineContext(state.lines, line),
         resolved: Boolean(thread.resolved),
         messages: (thread.messages ?? []).map((m: any) => ({
+          id: m.id,
           author: m.user?.first_name ?? members[m.user_id] ?? m.user_id,
           email: m.user?.email,
           content: m.content,
@@ -121,7 +123,8 @@ function renderMarkdown(d: ReviewData): string {
   L.push(`**${d.comments.length}** comment(s), **${d.changes.length}** tracked change(s).`, '');
   L.push(
     '_Act on these:_ `reply --thread <id> --message <text>` · `resolve --thread <id>` · ' +
-      '`delete-comment --thread <id>` · `accept --change <id>` · `reject --change <id>`.',
+      '`delete-comment --thread <id>` · `delete-message --message-id <id>` · ' +
+      '`accept --change <id>` · `reject --change <id>`.',
     '',
   );
 
@@ -141,7 +144,7 @@ function renderMarkdown(d: ReviewData): string {
         L.push(`\`thread ${c.threadId}\``);
         L.push('```', c.context, '```');
         for (const m of c.messages) {
-          L.push(`- **${m.author}**: ${m.content}`);
+          L.push(`- **${m.author}**: ${m.content}  \`msg ${m.id}\``);
         }
         if (!c.messages.length) L.push('- _(no message text)_');
         L.push('');

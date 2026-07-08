@@ -36,8 +36,8 @@ workflow and carries the review layer Git can't represent.
   (`.overleaf/reviews.md` + `.json`), so your tools have every co-author note in context.
 - 📤 **`push`** — turn local edits into **tracked-change suggestions**, mapping files to Overleaf
   docs by path (one file, or every changed `.tex` at once). `--dry-run` previews the exact ops.
-- 💬 **`comment` / `reply` / `resolve` / `delete-comment`** — full comment-thread control:
-  start a thread, reply, resolve/reopen, or delete.
+- 💬 **`comment` / `reply` / `resolve` / `delete-comment` / `delete-message`** — full comment
+  control: start a thread, reply, resolve/reopen, delete a whole thread or a single message.
 - ✅ **`accept` / `reject`** — act on your collaborators' tracked changes from the CLI.
 - 🔑 **`login`** — validated auth stored outside your repo (chmod 600); `--browser` mode is
   institutional-SSO friendly.
@@ -77,7 +77,8 @@ overleaf-review resolve --thread <id>       # thread ids come from `pull`
 | `comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]` | Add a comment anchored on the given text |
 | `reply --thread <id> --message <text>` | Reply to an existing comment thread |
 | `resolve --thread <id> [--reopen]` | Resolve (or reopen) a comment thread |
-| `delete-comment --thread <id>` | Delete a comment thread |
+| `delete-comment --thread <id>` | Delete a whole comment thread |
+| `delete-message --message-id <id> [--thread <id>]` | Delete a single message within a thread |
 | `accept --change <id> …` | Accept collaborators' tracked change(s) |
 | `reject --change <id> …` | Reject collaborators' tracked change(s) |
 
