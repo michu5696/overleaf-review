@@ -35,12 +35,39 @@ workflow and carries the review layer Git can't represent.
 - 📥 **`pull`** — read comments + tracked changes (with anchors) into a Git-friendly sidecar
   (`.overleaf/reviews.md` + `.json`), so your tools have every co-author note in context.
 - 📤 **`push`** — turn local edits into **tracked-change suggestions**, mapping files to Overleaf
-  docs by path (one file, or every changed `.tex` at once). `--dry-run` previews the exact ops.
+  docs by path (one file, or every changed `.tex` at once). `--dry-run` previews the exact ops;
+  `--direct` sends plain edits instead of suggestions.
+- 🔄 **`fetch`** — write Overleaf's current text back down into your repo (read-only on Overleaf, so
+  it cannot disturb a single comment or tracked change).
+- 🖼️ **`upload`** — push figures, PDFs, or new files into Overleaf.
 - 💬 **`comment` / `reply` / `resolve` / `delete-comment` / `delete-message`** — full comment
   control: start a thread, reply, resolve/reopen, delete a whole thread or a single message.
 - ✅ **`accept` / `reject`** — act on your collaborators' tracked changes from the CLI.
 - 🔑 **`login`** — validated auth stored outside your repo (chmod 600); `--browser` mode is
   institutional-SSO friendly.
+
+## ⚠️ Don't mix this with Overleaf's Git/GitHub sync
+
+**Overleaf's Git integration writes documents by wholesale content replacement.** The review layer
+is stored separately, anchored by character offsets — so a bulk overwrite orphans or displaces your
+comments and tracked changes. (Overleaf's own docs advise against combining Git with track changes.)
+This isn't something a tool can patch around; it's inherent to how the bridge writes.
+
+`overleaf-review` writes through Overleaf's **real-time OT API** instead — incremental insert/delete
+ops that Overleaf *transforms the review ranges against*, so comments and tracked changes survive.
+
+**Recommended setup: unlink Overleaf's Git/GitHub sync and let `overleaf-review` be the only bridge.**
+
+| Need | Command |
+| --- | --- |
+| Overleaf text → your repo | `fetch` |
+| Your edits → Overleaf, as suggestions | `push` |
+| Your edits → Overleaf, directly | `push --direct` |
+| Figures / new files → Overleaf | `upload` |
+
+Your Git repo stays a completely normal repo — commit whatever you like, `.tex` included — and
+nothing bidirectional exists that can clobber the review record. (Renaming/deleting files is still
+done in the Overleaf UI.)
 
 ## 📦 Install
 
@@ -73,7 +100,9 @@ overleaf-review resolve --thread <id>       # thread ids come from `pull`
 | `login [--cookie <v>] [--browser]` | Authenticate and store your session (SSO-friendly `--browser`) |
 | `link --project <id>` | Link this repo to an Overleaf project (`.overleaf/config.json`) |
 | `pull [--out <dir>]` | Read comments + tracked changes into a sidecar |
-| `push [--file <f>] [--doc <name>] [--dry-run]` | Send local edits as tracked-change suggestions (all changed `.tex` if no `--file`) |
+| `fetch [--file <f>] [--dry-run]` | Write Overleaf's text down into local files (read-only on Overleaf) |
+| `upload <path…> [--folder <name>]` | Upload figures / new files into Overleaf |
+| `push [--file <f>] [--doc <name>] [--direct] [--dry-run]` | Send local edits as tracked suggestions (all changed `.tex` if no `--file`); `--direct` for plain edits |
 | `comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]` | Add a comment anchored on the given text |
 | `reply --thread <id> --message <text>` | Reply to an existing comment thread |
 | `resolve --thread <id> [--reopen]` | Resolve (or reopen) a comment thread |
@@ -105,7 +134,7 @@ own account and projects. Use at your own risk.
 
 ## 🗺️ Roadmap
 
-- A `pull` that also writes doc content (not just the review sidecar)
+- File rename / delete (currently done in the Overleaf UI)
 - Trusted-publishing CI
 
 ## 📝 Changelog

@@ -94,6 +94,29 @@ export async function acceptChanges(
   return res.status;
 }
 
+/**
+ * Upload a file into the project (figures, new .tex, any binary). Same endpoint
+ * the web editor's uploader uses. Re-uploading the same name replaces the file.
+ */
+export async function uploadFile(
+  folderId: string,
+  name: string,
+  bytes: Buffer,
+  csrf: string,
+): Promise<{ success: boolean; entity_id: string; entity_type: string }> {
+  const form = new FormData();
+  form.append('qqfile', new Blob([new Uint8Array(bytes)]), name);
+  form.append('name', name);
+  form.append('relativePath', 'null');
+  const res = await fetch(
+    `${config.baseUrl}/project/${config.projectId}/upload?folder_id=${folderId}`,
+    // Deliberately no Content-Type — fetch sets the multipart boundary itself.
+    { method: 'POST', headers: headers({ 'X-CSRF-Token': csrf }), body: form },
+  );
+  if (!res.ok) throw new Error(`upload ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json() as Promise<{ success: boolean; entity_id: string; entity_type: string }>;
+}
+
 /** Delete a single message within a thread (flat path, like posting a message). */
 export async function deleteMessage(
   threadId: string,

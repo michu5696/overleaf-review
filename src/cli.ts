@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { pull } from './commands/pull';
 import { push } from './commands/push';
+import { fetchDocs } from './commands/fetch';
+import { upload } from './commands/upload';
 import { comment } from './commands/comment';
 import { reply } from './commands/reply';
 import { resolve } from './commands/resolve';
@@ -32,6 +34,9 @@ function usage(): void {
   console.log('  link --project <id>                       Link this repo to an Overleaf project\n');
   console.log('Read:');
   console.log('  pull [--out <dir>]                        Comments + tracked changes → sidecar\n');
+  console.log('Content (replaces the git bridge — review-safe):');
+  console.log('  fetch [--file <f>] [--dry-run]            Overleaf text → local files (read-only)');
+  console.log('  upload <path…> [--folder <name>]          Upload figures / new files to Overleaf\n');
   console.log('Comments:');
   console.log('  comment --anchor <text> --message <text> [--doc <name>] [--nth <n>]');
   console.log('  reply --thread <id> --message <text>      Reply to an existing thread');
@@ -39,7 +44,8 @@ function usage(): void {
   console.log('  delete-comment --thread <id>              Delete a whole thread');
   console.log('  delete-message --message-id <id>          Delete a single message\n');
   console.log('Tracked changes:');
-  console.log('  push [--file <f>] [--doc <name>] [--dry-run]   Send local edits as suggestions');
+  console.log('  push [--file <f>] [--doc <name>] [--direct] [--dry-run]');
+  console.log('        Send local edits as tracked suggestions (--direct = plain edits)');
   console.log('  accept --change <id> [--change <id> …]    Accept collaborators’ changes');
   console.log('  reject --change <id> [--change <id> …]    Reject collaborators’ changes');
   console.log('\n(thread/change ids come from `pull`; --change accepts comma-separated lists too)');
@@ -71,8 +77,28 @@ async function main() {
       break;
     }
     case 'push':
-      await push({ file: getFlag('file'), docName: getFlag('doc'), dryRun: process.argv.includes('--dry-run') });
+      await push({
+        file: getFlag('file'),
+        docName: getFlag('doc'),
+        direct: process.argv.includes('--direct'),
+        dryRun: process.argv.includes('--dry-run'),
+      });
       break;
+    case 'fetch':
+      await fetchDocs({ file: getFlag('file'), dryRun: process.argv.includes('--dry-run') });
+      break;
+    case 'upload': {
+      const argv = process.argv.slice(3);
+      const paths: string[] = [];
+      for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--folder') { i++; continue; } // skip flag + its value
+        if (argv[i].startsWith('--')) continue;
+        paths.push(argv[i]);
+      }
+      if (!paths.length) fail('upload requires at least one file path');
+      await upload(paths, getFlag('folder'));
+      break;
+    }
     case 'comment': {
       const anchor = getFlag('anchor');
       const message = getFlag('message');

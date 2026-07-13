@@ -9,6 +9,9 @@ export interface PushOptions {
   file?: string;
   /** Force the target Overleaf doc (path or basename); only valid with `file`. */
   docName?: string;
+  /** Send plain edits instead of tracked suggestions (omits `meta.tc`). Still
+   * range-safe: OT transforms existing comments/changes against every op. */
+  direct?: boolean;
   dryRun: boolean;
 }
 
@@ -121,6 +124,11 @@ export async function push(opts: PushOptions): Promise<void> {
     return;
   }
 
+  console.log(
+    opts.direct
+      ? 'Mode: DIRECT — plain edits (not marked as suggestions)'
+      : 'Mode: SUGGESTIONS — tracked changes for co-authors to accept/reject',
+  );
   for (const pl of plans) {
     const ins = pl.ops.filter((o) => o.i != null).length;
     const del = pl.ops.filter((o) => o.d != null).length;
@@ -137,7 +145,9 @@ export async function push(opts: PushOptions): Promise<void> {
 
   socket.on('otUpdateError', (a) => console.log('!! otUpdateError:', JSON.stringify(a)));
   for (const pl of plans) {
-    const update = { doc: pl.doc._id, op: pl.ops, v: pl.version, meta: { tc: randomBytes(12).toString('hex') } };
+    // `meta.tc` is what marks an op as a tracked suggestion; omit it for a direct edit.
+    const meta = opts.direct ? {} : { tc: randomBytes(12).toString('hex') };
+    const update = { doc: pl.doc._id, op: pl.ops, v: pl.version, meta };
     const ack = (await socket.emit('applyOtUpdate', [pl.doc._id, update], 20000)) as any[];
     if (ack?.[0]) {
       socket.close();
@@ -154,8 +164,9 @@ export async function push(opts: PushOptions): Promise<void> {
   socket.close();
 
   const totalOps = plans.reduce((n, p) => n + p.ops.length, 0);
+  const mode = opts.direct ? 'direct edit(s)' : 'tracked suggestion(s)';
   console.log(
-    `\n✅ Pushed suggestions to ${plans.length} file(s), ${totalOps} tracked op(s) total — ` +
+    `\n✅ Pushed ${totalOps} ${mode} across ${plans.length} file(s) — ` +
       `verified match: ${allMatch ? 'yes' : '⚠️ NO, inspect'}`,
   );
 }
