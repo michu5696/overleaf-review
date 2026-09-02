@@ -23,6 +23,14 @@ export interface DocState {
   ranges: { comments?: any[]; changes?: any[] };
 }
 
+export interface OtUpdate {
+  doc: string;
+  op: unknown[];
+  v: number;
+  meta?: Record<string, unknown>;
+  hash?: string;
+}
+
 function collectDocs(rootFolder: any[] | undefined): Doc[] {
   const out: Doc[] = [];
   const walk = (folders: any[], prefix: string) => {
@@ -68,4 +76,59 @@ export async function joinDoc(socket: OverleafSocket, docId: string): Promise<Do
   const [err, lines, version, , ranges] = res;
   if (err) throw new Error(`joinDoc error: ${JSON.stringify(err)}`);
   return { version, lines: lines ?? [], ranges: ranges ?? {} };
+}
+
+/**
+ * Queue an OT update and wait for Overleaf's later `otUpdateApplied` event.
+ * The socket acknowledgement only confirms that real-time accepted the update
+ * into its queue; it is not proof that document-updater applied it.
+ */
+export async function applyOtUpdateAndWait(
+  socket: OverleafSocket,
+  docId: string,
+  update: OtUpdate,
+  timeoutMs = 30000,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopApplied = () => {};
+  let stopError = () => {};
+
+  const applied = new Promise<void>((resolve, reject) => {
+    stopApplied = socket.on('otUpdateApplied', (args) => {
+      const event = args[0] as { doc?: string; v?: number; op?: unknown } | undefined;
+      // The sender acknowledgement is the terse { doc, v } shape. Full events
+      // containing `op` are collaborator updates broadcast on the same room and
+      // must not be mistaken for confirmation of our own write.
+      if (
+        event?.doc === docId &&
+        Number.isSafeInteger(event.v) &&
+        event.v! >= update.v &&
+        !Object.prototype.hasOwnProperty.call(event, 'op')
+      ) {
+        resolve();
+      }
+    });
+    stopError = socket.on('otUpdateError', (args) => {
+      const metadata = args[1] as { doc_id?: string } | undefined;
+      if (metadata?.doc_id && metadata.doc_id !== docId) return;
+      reject(new Error(`Overleaf failed to apply the OT update: ${JSON.stringify(args)}`));
+    });
+    timer = setTimeout(
+      () => reject(new Error(`OT update for ${docId} was queued but not confirmed within ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
+  // The server can report an asynchronous failure before its queue ack arrives.
+  // Attach a handler immediately; the original promise is still awaited below.
+  void applied.catch(() => {});
+
+  try {
+    const ack = (await socket.emit('applyOtUpdate', [docId, update], timeoutMs)) as any[];
+    if (ack?.[0]) throw new Error(`Overleaf rejected the OT update: ${JSON.stringify(ack[0])}`);
+    await applied;
+  } finally {
+    if (timer) clearTimeout(timer);
+    stopApplied();
+    stopError();
+  }
 }

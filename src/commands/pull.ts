@@ -4,6 +4,7 @@ import { config } from '../config';
 import { openProject, joinDoc } from '../lib/session';
 import { getThreads } from '../lib/rest';
 import { offsetToLine, lineContext } from '../lib/anchors';
+import { acquireMutationLock, type MutationLock } from '../lib/submission-lock';
 
 interface Message {
   id: string;
@@ -54,66 +55,80 @@ function buildMemberMap(project: any): Record<string, string> {
   return map;
 }
 
-export async function pull(outDir = '.overleaf'): Promise<ReviewData> {
-  const { socket, project, docs } = await openProject();
-  const members = buildMemberMap(project);
-  const threads = await getThreads();
+export async function pull(
+  outDir = '.overleaf',
+  options: { acquireLock?: boolean } = {},
+): Promise<ReviewData> {
+  let mutationLock: MutationLock | undefined;
+  let opened: Awaited<ReturnType<typeof openProject>> | undefined;
+  try {
+    if (options.acquireLock !== false) mutationLock = acquireMutationLock(config.projectId);
+    opened = await openProject();
+    const { socket, project, docs } = opened;
+    const members = buildMemberMap(project);
+    const threads = await getThreads();
 
-  const comments: ReviewComment[] = [];
-  const changes: ReviewChange[] = [];
+    const comments: ReviewComment[] = [];
+    const changes: ReviewChange[] = [];
 
-  for (const doc of docs) {
-    const state = await joinDoc(socket, doc._id);
+    for (const doc of docs) {
+      const state = await joinDoc(socket, doc._id);
 
-    for (const c of state.ranges.comments ?? []) {
-      const line = offsetToLine(state.lines, c.op.p);
-      const thread = threads[c.op.t] ?? {};
-      comments.push({
-        doc: doc.path,
-        threadId: c.op.t,
-        anchor: c.op.c,
-        line: line + 1,
-        context: lineContext(state.lines, line),
-        resolved: Boolean(thread.resolved),
-        messages: (thread.messages ?? []).map((m: any) => ({
-          id: m.id,
-          author: m.user?.first_name ?? members[m.user_id] ?? m.user_id,
-          email: m.user?.email,
-          content: m.content,
-          timestamp: m.timestamp,
-        })),
-      });
+      for (const c of state.ranges.comments ?? []) {
+        const line = offsetToLine(state.lines, c.op.p);
+        const thread = threads[c.op.t] ?? {};
+        comments.push({
+          doc: doc.path,
+          threadId: c.op.t,
+          anchor: c.op.c,
+          line: line + 1,
+          context: lineContext(state.lines, line),
+          resolved: Boolean(thread.resolved),
+          messages: (thread.messages ?? []).map((m: any) => ({
+            id: m.id,
+            author: m.user?.first_name ?? members[m.user_id] ?? m.user_id,
+            email: m.user?.email,
+            content: m.content,
+            timestamp: m.timestamp,
+          })),
+        });
+      }
+
+      for (const ch of state.ranges.changes ?? []) {
+        const isInsert = typeof ch.op.i === 'string';
+        const line = offsetToLine(state.lines, ch.op.p);
+        changes.push({
+          doc: doc.path,
+          id: ch.id,
+          type: isInsert ? 'insert' : 'delete',
+          text: isInsert ? ch.op.i : ch.op.d,
+          line: line + 1,
+          context: lineContext(state.lines, line),
+          author: members[ch.metadata?.user_id] ?? ch.metadata?.user_id ?? 'unknown',
+          ts: ch.metadata?.ts,
+        });
+      }
     }
 
-    for (const ch of state.ranges.changes ?? []) {
-      const isInsert = typeof ch.op.i === 'string';
-      const line = offsetToLine(state.lines, ch.op.p);
-      changes.push({
-        doc: doc.path,
-        id: ch.id,
-        type: isInsert ? 'insert' : 'delete',
-        text: isInsert ? ch.op.i : ch.op.d,
-        line: line + 1,
-        context: lineContext(state.lines, line),
-        author: members[ch.metadata?.user_id] ?? ch.metadata?.user_id ?? 'unknown',
-        ts: ch.metadata?.ts,
-      });
+    const data: ReviewData = {
+      project: project?.name ?? '(unknown)',
+      projectId: config.projectId,
+      pulledAt: new Date().toISOString(),
+      comments,
+      changes,
+    };
+
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'reviews.json'), JSON.stringify(data, null, 2) + '\n');
+    writeFileSync(join(outDir, 'reviews.md'), renderMarkdown(data));
+    return data;
+  } finally {
+    try {
+      opened?.socket.close();
+    } finally {
+      mutationLock?.release();
     }
   }
-  socket.close();
-
-  const data: ReviewData = {
-    project: project?.name ?? '(unknown)',
-    projectId: config.projectId,
-    pulledAt: new Date().toISOString(),
-    comments,
-    changes,
-  };
-
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'reviews.json'), JSON.stringify(data, null, 2) + '\n');
-  writeFileSync(join(outDir, 'reviews.md'), renderMarkdown(data));
-  return data;
 }
 
 function renderMarkdown(d: ReviewData): string {

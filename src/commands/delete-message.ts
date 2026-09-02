@@ -1,4 +1,6 @@
 import { getCsrfToken, getThreads, deleteMessage } from '../lib/rest';
+import { config } from '../config';
+import { acquireMutationLock } from '../lib/submission-lock';
 
 /**
  * Delete a single message within a comment thread (as opposed to the whole
@@ -6,20 +8,25 @@ import { getCsrfToken, getThreads, deleteMessage } from '../lib/rest';
  * by scanning threads for the message. Ids come from `pull`.
  */
 export async function deleteThreadMessage(messageId: string, threadId?: string): Promise<void> {
-  const csrf = await getCsrfToken();
+  const mutationLock = acquireMutationLock(config.projectId);
+  try {
+    const csrf = await getCsrfToken();
 
-  let tid = threadId;
-  if (!tid) {
-    const threads = await getThreads();
-    for (const [t, v] of Object.entries(threads)) {
-      if ((v as any).messages?.some((m: any) => m.id === messageId)) {
-        tid = t;
-        break;
+    let tid = threadId;
+    if (!tid) {
+      const threads = await getThreads();
+      for (const [t, v] of Object.entries(threads)) {
+        if ((v as any).messages?.some((m: any) => m.id === messageId)) {
+          tid = t;
+          break;
+        }
       }
     }
-  }
-  if (!tid) throw new Error(`message ${messageId} not found in any thread`);
+    if (!tid) throw new Error(`message ${messageId} not found in any thread`);
 
-  await deleteMessage(tid, messageId, csrf);
-  console.log(`✅ Deleted message ${messageId} from thread ${tid}`);
+    await deleteMessage(tid, messageId, csrf);
+    console.log(`✅ Deleted message ${messageId} from thread ${tid}`);
+  } finally {
+    mutationLock.release();
+  }
 }

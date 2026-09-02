@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -22,6 +22,17 @@ export function loadProjectConfig(): ProjectConfig {
 
 export function saveProjectConfig(cfg: ProjectConfig): string {
   mkdirSync('.overleaf', { recursive: true });
-  writeFileSync(REPO_CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
+  const temp = `${REPO_CONFIG_PATH}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    writeFileSync(temp, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
+    renameSync(temp, REPO_CONFIG_PATH);
+  } catch (error) {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // The rename may already have consumed the temporary file.
+    }
+    throw error;
+  }
   return REPO_CONFIG_PATH;
 }

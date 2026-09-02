@@ -34,12 +34,189 @@ export async function getThreads(): Promise<Record<string, any>> {
   return res.json() as Promise<Record<string, any>>;
 }
 
-/** Post the message body of a comment thread. */
-export async function postThreadMessage(
+export interface ThreadMessageLike {
+  id?: unknown;
+  _id?: unknown;
+  content?: unknown;
+  timestamp?: unknown;
+  createdAt?: unknown;
+  created_at?: unknown;
+  [key: string]: unknown;
+}
+
+export interface PostThreadMessageResult {
+  status: number;
+  /** Present when Overleaf returned a message object/id in the response body. */
+  messageId?: string;
+  /** Parsed JSON response, or a short raw response when it was not JSON. */
+  responseBody?: unknown;
+}
+
+/** A completed HTTP response that definitively rejected the requested mutation. */
+export class RestRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly responseBody: string,
+  ) {
+    super(message);
+    this.name = 'RestRequestError';
+  }
+}
+
+export function threadMessages(thread: unknown): ThreadMessageLike[] {
+  if (!thread || typeof thread !== 'object') return [];
+  const messages = (thread as { messages?: unknown }).messages;
+  return Array.isArray(messages)
+    ? messages.filter((message): message is ThreadMessageLike => Boolean(message && typeof message === 'object'))
+    : [];
+}
+
+export function threadMessageId(message: ThreadMessageLike | undefined): string | undefined {
+  const value = message?.id ?? message?._id;
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function timestampMs(message: ThreadMessageLike): number | undefined {
+  const raw = message.timestamp ?? message.createdAt ?? message.created_at;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    // Some installations serialize Unix seconds, while current overleaf.com
+    // uses milliseconds.
+    return raw < 100_000_000_000 ? raw * 1000 : raw;
+  }
+  if (typeof raw === 'string') {
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric) && raw.trim()) {
+      return numeric < 100_000_000_000 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+/** Find an exact-content message recent enough to plausibly be a retry. */
+export function findRecentIdenticalMessage(
+  thread: unknown,
+  content: string,
+  nowMs = Date.now(),
+  windowMs = 5 * 60 * 1000,
+): ThreadMessageLike | undefined {
+  const earliest = nowMs - Math.max(0, windowMs);
+  return threadMessages(thread)
+    .filter((message) => {
+      if (message.content !== content) return false;
+      const timestamp = timestampMs(message);
+      // Allow modest server clock skew, but do not let a wildly future-dated
+      // message suppress replies indefinitely.
+      return timestamp !== undefined && timestamp >= earliest && timestamp <= nowMs + 60_000;
+    })
+    .sort((a, b) => (timestampMs(b) ?? 0) - (timestampMs(a) ?? 0))[0];
+}
+
+/**
+ * Match the newly observed exact-content message after a POST. Existing ids are
+ * excluded so `--force` can still prove that it created an additional reply.
+ */
+export function findNewIdenticalMessage(
+  beforeThread: unknown,
+  afterThread: unknown,
+  content: string,
+  returnedMessageId?: string,
+): ThreadMessageLike | undefined {
+  const after = threadMessages(afterThread);
+  if (returnedMessageId) {
+    return after.find(
+      (message) => threadMessageId(message) === returnedMessageId && message.content === content,
+    );
+  }
+
+  const beforeIds = new Set(
+    threadMessages(beforeThread).map(threadMessageId).filter((id): id is string => Boolean(id)),
+  );
+  const candidates = [...after].reverse().filter((message) => {
+      if (message.content !== content) return false;
+      const id = threadMessageId(message);
+      return Boolean(id && !beforeIds.has(id));
+    });
+  // Without a response id, more than one new exact-content message is
+  // indistinguishable from a collaborator race. Preserve ambiguity instead of
+  // attributing an arbitrary message to this process.
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+/** Extract a returned message id from the response shapes used by Overleaf variants. */
+export function extractPostedMessageId(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const object = value as Record<string, unknown>;
+  for (const key of ['message_id', 'messageId']) {
+    if (typeof object[key] === 'string' && object[key]) return object[key];
+  }
+  for (const key of ['message', 'data']) {
+    const nested = object[key];
+    if (nested && typeof nested === 'object') {
+      const nestedId = threadMessageId(nested as ThreadMessageLike) ?? extractPostedMessageId(nested);
+      if (nestedId) return nestedId;
+    }
+  }
+  // A top-level id is accepted last because some API variants return a message
+  // object directly, while nested response objects may use `id` for other data.
+  return threadMessageId(object as ThreadMessageLike);
+}
+
+export interface ObservePostedMessageResult {
+  message?: ThreadMessageLike;
+  thread?: unknown;
+  attempts: number;
+  lastError?: string;
+}
+
+/** Poll thread readback until the newly posted message can be identified. */
+export async function observePostedThreadMessage(
+  threadId: string,
+  beforeThread: unknown,
+  content: string,
+  returnedMessageId?: string,
+  options: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<ObservePostedMessageResult> {
+  const timeoutMs = Math.max(0, options.timeoutMs ?? 5000);
+  const intervalMs = Math.max(10, options.intervalMs ?? 250);
+  const deadline = Date.now() + timeoutMs;
+  let attempts = 0;
+  let lastThread: unknown;
+  let lastError: string | undefined;
+
+  do {
+    attempts += 1;
+    try {
+      lastThread = (await getThreads())[threadId];
+      const message = findNewIdenticalMessage(
+        beforeThread,
+        lastThread,
+        content,
+        returnedMessageId,
+      );
+      if (message) return { message, thread: lastThread, attempts };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(intervalMs, deadline - Date.now())));
+  } while (Date.now() <= deadline);
+
+  return {
+    thread: lastThread,
+    attempts,
+    ...(lastError ? { lastError } : {}),
+  };
+}
+
+/** Post a message and retain any response payload useful for verification. */
+export async function postThreadMessageDetailed(
   threadId: string,
   content: string,
   csrf: string,
-): Promise<number> {
+): Promise<PostThreadMessageResult> {
   const res = await fetch(
     `${config.baseUrl}/project/${config.projectId}/thread/${threadId}/messages`,
     {
@@ -48,10 +225,37 @@ export async function postThreadMessage(
       body: JSON.stringify({ content }),
     },
   );
+  const rawBody = await res.text();
   if (!res.ok) {
-    throw new Error(`postThreadMessage ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new RestRequestError(
+      `postThreadMessage ${res.status}: ${rawBody.slice(0, 300)}`,
+      res.status,
+      rawBody.slice(0, 1000),
+    );
   }
-  return res.status;
+
+  let responseBody: unknown;
+  if (rawBody) {
+    try {
+      responseBody = JSON.parse(rawBody);
+    } catch {
+      responseBody = rawBody.slice(0, 1000);
+    }
+  }
+  return {
+    status: res.status,
+    messageId: extractPostedMessageId(responseBody),
+    ...(responseBody === undefined ? {} : { responseBody }),
+  };
+}
+
+/** Post the message body of a comment thread (status-only compatibility API). */
+export async function postThreadMessage(
+  threadId: string,
+  content: string,
+  csrf: string,
+): Promise<number> {
+  return (await postThreadMessageDetailed(threadId, content, csrf)).status;
 }
 
 /**

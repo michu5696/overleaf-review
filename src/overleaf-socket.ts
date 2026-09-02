@@ -77,10 +77,20 @@ export class OverleafSocket {
   }
 
   /** Subscribe to a server-pushed event (e.g. otUpdateApplied). */
-  on(event: string, handler: Handler): void {
+  on(event: string, handler: Handler): () => void {
     const list = this.handlers.get(event) ?? [];
     list.push(handler);
     this.handlers.set(event, list);
+    return () => this.off(event, handler);
+  }
+
+  /** Remove a previously registered server-pushed event handler. */
+  off(event: string, handler: Handler): void {
+    const list = this.handlers.get(event);
+    if (!list) return;
+    const next = list.filter((candidate) => candidate !== handler);
+    if (next.length) this.handlers.set(event, next);
+    else this.handlers.delete(event);
   }
 
   async connect(projectId: string): Promise<void> {

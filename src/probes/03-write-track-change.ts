@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { openProject, joinDoc } from '../lib/session';
+import { createTrackedChangeSeed } from '../lib/tracked-changes';
 
 /**
  * PROBE 3 — prove WRITE (tracked change).
@@ -19,10 +20,10 @@ async function main() {
   console.log(`doc=${doc.name}  publicId=${publicId}  v=${before.version}  ` +
     `changes-before=${before.ranges.changes?.length ?? 0}`);
 
-  // 2) Build a tracked-change insert. `meta.tc` (a fresh ObjectId-shaped id)
-  //    is the flag that turns a plain insert into a tracked suggestion.
+  // 2) Build a tracked-change insert. `meta.tc` is an 18-hex seed; Overleaf
+  //    appends a six-hex counter to create each ObjectId-shaped range id.
   const marker = `TC-${randomBytes(3).toString('hex')} `;
-  const tcId = randomBytes(12).toString('hex');
+  const tcId = createTrackedChangeSeed();
   const update = {
     doc: doc._id,
     op: [{ p: 0, i: marker }],
